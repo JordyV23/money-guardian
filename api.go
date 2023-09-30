@@ -9,50 +9,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// WriteJSON es una función que toma un objeto http.ResponseWriter, un código de estado HTTP, y un valor 'v' que se va a convertir a JSON y escribir en la respuesta.
-// Parámetros:
-// - w: El objeto http.ResponseWriter en el que se escribirá la respuesta.
-// - status: El código de estado HTTP que se establecerá en la respuesta.
-// - v: El valor que se convertirá a JSON y se escribirá en la respuesta.
-// Devuelve:
-// - Un error si ocurre algún problema durante la escritura de la respuesta, de lo contrario, devuelve nil.
-func WriteJSON(w http.ResponseWriter, status int, v any) error {
-	// Establece el código de estado HTTP en la respuesta.
-	w.WriteHeader(status)
-
-	// Establece el encabezado Content-Type para indicar que la respuesta es JSON.
-	w.Header().Set("Content-Type", "application/json")
-
-	// Utiliza el codificador JSON para convertir el valor 'v' en JSON y escribirlo en la respuesta.
-	return json.NewEncoder(w).Encode(v)
-}
-
-// apiFunc es un tipo de función que representa una función que maneja solicitudes HTTP.
-// Esta función toma un objeto http.ResponseWriter, un puntero a http.Request y devuelve un error.
-type apiFunc func(http.ResponseWriter, *http.Request) error
-
-// ApiError es una estructura que representa un error en una API.
-// Contiene un campo "Error" que almacena una descripción o mensaje de error.
-type ApiError struct {
-	Error string // El mensaje de error o descripción.
-}
-
-// makeHttpHandleFunc toma una función apiFunc y devuelve una función http.HandlerFunc que actúa como un manejador de solicitudes HTTP.
-// Parámetros:
-// - f: Una función apiFunc que manejará la solicitud HTTP.
-// Devuelve:
-// - Una función http.HandlerFunc que procesa las solicitudes HTTP utilizando la función apiFunc proporcionada y maneja los errores devueltos por la función.
-func makeHttpHandleFunc(f apiFunc) http.HandlerFunc {
-	// Devuelve una función http.HandlerFunc que toma un objeto http.ResponseWriter y un puntero a http.Request.
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Llama a la función apiFunc proporcionada y verifica si devuelve un error.
-		if err := f(w, r); err != nil {
-			// Si hay un error, utiliza la función WriteJSON para responder con un código de estado HTTP 400 (Bad Request) y un mensaje de error JSON.
-			WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
-		}
-	}
-}
-
 // APIServer es una estructura que representa un servidor de API.
 type APIServer struct {
 	linstenAddress string // El campo linstenAddress almacena la dirección en la que el servidor escuchará las solicitudes.
@@ -134,4 +90,48 @@ func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) 
 
 func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
 	return nil
+}
+
+// WriteJSON es una función que toma un objeto http.ResponseWriter, un código de estado HTTP, y un valor 'v' que se va a convertir a JSON y escribir en la respuesta.
+// Parámetros:
+// - w: El objeto http.ResponseWriter en el que se escribirá la respuesta.
+// - status: El código de estado HTTP que se establecerá en la respuesta.
+// - v: El valor que se convertirá a JSON y se escribirá en la respuesta.
+// Devuelve:
+// - Un error si ocurre algún problema durante la escritura de la respuesta, de lo contrario, devuelve nil.
+func WriteJSON(w http.ResponseWriter, status int, v any) error {
+	// Establece el encabezado Content-Type para indicar que la respuesta es JSON.
+	w.Header().Add("Content-Type", "application/json")
+
+	// Establece el código de estado HTTP en la respuesta.
+	w.WriteHeader(status)
+
+	// Utiliza el codificador JSON para convertir el valor 'v' en JSON y escribirlo en la respuesta.
+	return json.NewEncoder(w).Encode(v)
+}
+
+// apiFunc es un tipo de función que representa una función que maneja solicitudes HTTP.
+// Esta función toma un objeto http.ResponseWriter, un puntero a http.Request y devuelve un error.
+type apiFunc func(http.ResponseWriter, *http.Request) error
+
+// ApiError es una estructura que representa un error en una API.
+// Contiene un campo "Error" que almacena una descripción o mensaje de error.
+type ApiError struct {
+	Error string // El mensaje de error o descripción.
+}
+
+// makeHttpHandleFunc toma una función apiFunc y devuelve una función http.HandlerFunc que actúa como un manejador de solicitudes HTTP.
+// Parámetros:
+// - f: Una función apiFunc que manejará la solicitud HTTP.
+// Devuelve:
+// - Una función http.HandlerFunc que procesa las solicitudes HTTP utilizando la función apiFunc proporcionada y maneja los errores devueltos por la función.
+func makeHttpHandleFunc(f apiFunc) http.HandlerFunc {
+	// Devuelve una función http.HandlerFunc que toma un objeto http.ResponseWriter y un puntero a http.Request.
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Llama a la función apiFunc proporcionada y verifica si devuelve un error.
+		if err := f(w, r); err != nil {
+			// Si hay un error, utiliza la función WriteJSON para responder con un código de estado HTTP 400 (Bad Request) y un mensaje de error JSON.
+			WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
+		}
+	}
 }
