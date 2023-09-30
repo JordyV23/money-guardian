@@ -11,7 +11,8 @@ import (
 
 // APIServer es una estructura que representa un servidor de API.
 type APIServer struct {
-	linstenAddress string // El campo linstenAddress almacena la dirección en la que el servidor escuchará las solicitudes.
+	linstenAddress string  // El campo linstenAddress almacena la dirección en la que el servidor escuchará las solicitudes.
+	store          Storage // El campo store almacena una instancia de Storage que se utilizará para almacenar y recuperar datos.
 }
 
 // NewApiServer crea una nueva instancia de APIServer y la inicializa con la dirección IP proporcionada.
@@ -19,9 +20,10 @@ type APIServer struct {
 // - IpAddress: La dirección IP que se utilizará como dirección de escucha del servidor.
 // Devuelve:
 // - Un puntero a la instancia de APIServer creada.
-func NewAPIServer(IpAddress string) *APIServer {
+func NewAPIServer(IpAddress string, store Storage) *APIServer {
 	return &APIServer{
 		linstenAddress: IpAddress,
+		store:          store,
 	}
 }
 
