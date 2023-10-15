@@ -38,7 +38,7 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/account", makeHttpHandleFunc(s.handleAccount))
 
 	// Define una ruta para el endpoint "/account" que recibe un parametro llamado id y la asocia con la función handleGetAccount de este servidor.
-	router.HandleFunc("/account/{id}", makeHttpHandleFunc(s.handleGetAccount))
+	router.HandleFunc("/account/{id}", makeHttpHandleFunc(s.handleGetAccountByID))
 
 	// Registra un mensaje de inicio en el registro de logs.
 	log.Print("Starting API server on port: ", s.linstenAddress)
@@ -59,7 +59,7 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 	// Inspecciona el método HTTP de la solicitud entrante.
 	switch r.Method {
 	case "GET":
-		// En caso de solicitud GET, llama a la función handleGetAccount para manejar la solicitud.
+		// En caso de solicitud GET, llama a la función handleGetAccountByID para manejar la solicitud.
 		return s.handleGetAccount(w, r)
 	case "POST":
 		// En caso de solicitud POST, llama a la función handleCreateAccount para manejar la solicitud.
@@ -74,6 +74,15 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
+	accounts, err := s.store.GetAccounts()
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, accounts)
+}
+
+func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
 	//Extrae el id del parametro de la ruta
 	id := mux.Vars(r)["id"]
 	fmt.Println("Buscar en la DB" + id)
@@ -83,7 +92,17 @@ func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) err
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	createAccountRequest := new(CreateAccountRequest)
+	if err := json.NewDecoder(r.Body).Decode(createAccountRequest); err != nil {
+		return err
+	}
+
+	account := NewAccount(createAccountRequest.FirstName, createAccountRequest.LastName)
+	if err := s.store.CreateAccount(account); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, account)
 }
 
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
