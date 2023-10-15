@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -40,6 +41,9 @@ func (s *APIServer) Run() {
 	// Define una ruta para el endpoint "/account" que recibe un parametro llamado id y la asocia con la función handleGetAccount de este servidor.
 	router.HandleFunc("/account/{id}", makeHttpHandleFunc(s.handleGetAccountByID))
 
+	// Define una ruta para el endpoint "/transfer" y la asocia con la función handleTransfer del servidor.
+	router.HandleFunc("/transfer", makeHttpHandleFunc(s.handleTransfer))
+
 	// Registra un mensaje de inicio en el registro de logs.
 	log.Print("Starting API server on port: ", s.linstenAddress)
 
@@ -47,7 +51,7 @@ func (s *APIServer) Run() {
 	http.ListenAndServe(s.linstenAddress, router)
 }
 
-// handleAccount es un manejador de solicitudes para la ruta "/account" en el servidor de la API.
+// handleAccount funcion para la ruta "/account" en el servidor de la API.
 // Esta función inspecciona el método HTTP de la solicitud entrante y enrutará la solicitud a las funciones de manejo correspondientes
 // según el método (GET, POST o DELETE).
 // Parámetros:
@@ -64,9 +68,6 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 	case "POST":
 		// En caso de solicitud POST, llama a la función handleCreateAccount para manejar la solicitud.
 		return s.handleCreateAccount(w, r)
-	case "DELETE":
-		// En caso de solicitud DELETE, llama a la función handleDeleteAccount para manejar la solicitud.
-		return s.handleDeleteAccount(w, r)
 	default:
 		// Si el método no coincide con ninguno de los casos anteriores, devuelve nil para indicar que la solicitud no se manejará.
 		return fmt.Errorf("accion no permitida %s", r.Method)
@@ -82,13 +83,34 @@ func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) err
 	return WriteJSON(w, http.StatusOK, accounts)
 }
 
+// handleGetAccountByID funcion para obtener detalles de una cuenta por su ID o eliminar una cuenta.
+// Parámetros:
+// - w: El objeto http.ResponseWriter para escribir la respuesta.
+// - r: El objeto *http.Request que contiene la solicitud HTTP entrante.
+// Devuelve:
+// - Un error en caso de que ocurra algún problema durante el procesamiento de la solicitud, de lo contrario, devuelve nil.
 func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
-	//Extrae el id del parametro de la ruta
-	id := mux.Vars(r)["id"]
-	fmt.Println("Buscar en la DB" + id)
+	if r.Method == "GET" {
+		// Obtiene el ID de la solicitud.
+		id, err := getID(r)
 
-	//Responde con un JSON con la cuenta
-	return WriteJSON(w, http.StatusOK, &Account{})
+		if err != nil {
+			return err
+		}
+		// Obtiene los detalles de la cuenta por su ID.
+		account, err := s.store.GetAccountById(id)
+		if err != nil {
+			return err
+		}
+		// Responde con un JSON que contiene los detalles de la cuenta.
+		return WriteJSON(w, http.StatusOK, account)
+	}
+	if r.Method == "DELETE" {
+		// Si la solicitud es un DELETE, llama a la función handleDeleteAccount para eliminar la cuenta.
+		return s.handleDeleteAccount(w, r)
+	}
+	// Si el método HTTP no es ni GET ni DELETE, devuelve un error indicando que la acción no está permitida.
+	return fmt.Errorf("acción no permitida %s", r.Method)
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
@@ -105,12 +127,36 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	return WriteJSON(w, http.StatusOK, account)
 }
 
+// handleDeleteAccount funcion para eliminar una cuenta por su ID.
+// Parámetros:
+// - w: El objeto http.ResponseWriter para escribir la respuesta.
+// - r: El objeto *http.Request que contiene la solicitud HTTP entrante.
+// Devuelve:
+// - Un error en caso de que ocurra algún problema durante el procesamiento de la solicitud, de lo contrario, devuelve nil.
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	// Obtiene el ID de la solicitud.
+	id, err := getID(r)
+	if err != nil {
+		return err
+	}
+	// Llama a la función s.store.DeleteAccount para eliminar la cuenta por su ID.
+	if err := s.store.DeleteAccount(id); err != nil {
+		return err
+	}
+	// Responde con un JSON que contiene un mensaje indicando que la cuenta ha sido eliminada.
+	return WriteJSON(w, http.StatusOK, map[string]string{"message": "cuenta eliminada"})
 }
 
 func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
-	return nil
+
+	transferReq := new(TransferRequest)
+	if err := json.NewDecoder(r.Body).Decode(transferReq); err != nil {
+		return err
+	}
+
+	defer r.Body.Close()
+
+	return WriteJSON(w, http.StatusOK, transferReq)
 }
 
 // WriteJSON es una función que toma un objeto http.ResponseWriter, un código de estado HTTP, y un valor 'v' que se va a convertir a JSON y escribir en la respuesta.
@@ -138,7 +184,7 @@ type apiFunc func(http.ResponseWriter, *http.Request) error
 // ApiError es una estructura que representa un error en una API.
 // Contiene un campo "Error" que almacena una descripción o mensaje de error.
 type ApiError struct {
-	Error string // El mensaje de error o descripción.
+	Error string `json:"error"` // El mensaje de error o descripción.
 }
 
 // makeHttpHandleFunc toma una función apiFunc y devuelve una función http.HandlerFunc que actúa como un manejador de solicitudes HTTP.
@@ -155,4 +201,22 @@ func makeHttpHandleFunc(f apiFunc) http.HandlerFunc {
 			WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
 		}
 	}
+}
+
+// getID extrae el ID de un parámetro en la ruta de la solicitud HTTP y lo convierte en un entero.
+// Parámetros:
+// - r: El objeto *http.Request que contiene la solicitud HTTP entrante.
+// Devuelve:
+// - El ID extraído como un entero y un posible error si el ID no se puede convertir en un entero.
+func getID(r *http.Request) (int, error) {
+	// Extrae el ID del parámetro en la ruta.
+	idStr := mux.Vars(r)["id"]
+	// Convierte el ID de cadena a un entero.
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		// Si la conversión falla, devuelve un error indicando que el ID es inválido.
+		return id, fmt.Errorf("ID inválido: %s", idStr)
+	}
+	// Devuelve el ID como un entero y un error nil, indicando que la extracción y conversión fueron exitosas.
+	return id, nil
 }

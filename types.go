@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+type TransferRequest struct {
+	ToAccount int `json:"toAccount"`
+	Amount    int `json:"Amount"`
+}
+
 // CreateAccountRequest es una estructura utilizada para representar una solicitud de creación de cuenta en formato JSON.
 type CreateAccountRequest struct {
 	FirstName string `json:"firstName"` // El campo FirstName almacena el primer nombre del titular de la cuenta.
